@@ -12,18 +12,22 @@
 .grid{display:grid;grid-template-columns:1.5fr .8fr;gap:20px}.card{background:linear-gradient(180deg,#141d30e8,#0d1422e8);border:1px solid var(--line);border-radius:22px;box-shadow:0 22px 55px #00000048;padding:25px;backdrop-filter:blur(14px)}.label{font-size:10px;font-weight:800;letter-spacing:.14em;color:#8392ad}h2{font-size:19px;margin:7px 0 0}.head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.badge{font-size:9px;border:1px solid var(--line);color:var(--muted);padding:7px 9px;border-radius:999px}
 .panel{display:block;margin-top:20px}
 label{display:block;color:#cdd7e9;font-size:12px;font-weight:600;margin-bottom:8px}input,select{width:100%;padding:13px 14px;background:#080d17;color:var(--text);border:1px solid var(--line);border-radius:11px;outline:none}input:focus,select:focus{border-color:#7657ff99;box-shadow:0 0 0 4px #7657ff14}.hint{font-size:10px;line-height:1.6;color:#71809a;margin-top:8px}
-.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);overflow:hidden;border-radius:13px;margin:24px 0 17px}.sum{background:#ffffff03;padding:13px}.sum span{display:block;color:#6f7e98;font-size:9px;text-transform:uppercase;letter-spacing:.1em}.sum strong{display:block;font-size:11px;margin-top:6px}
+.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);overflow:hidden;border-radius:13px;margin:24px 0 17px}.sum{background:#ffffff03;padding:13px}.sum span{display:block;color:#6f7e98;font-size:9px;text-transform:uppercase;letter-spacing:.1em}.sum strong{display:block;font-size:11px;margin-top:6px}
 button.primary{width:100%;border:0;color:#fff;padding:14px;border-radius:12px;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));cursor:pointer}.primary:disabled{opacity:.65;cursor:not-allowed}.msg{display:none;padding:11px 12px;border-radius:10px;font-size:11px;line-height:1.5;margin-top:12px}.msg.show{display:block}.ok{color:#b9eed4;background:#55d39a12;border:1px solid #55d39a35}.bad{color:#ffc7cb;background:#ff7f8812;border:1px solid #ff7f8835}
 .feature{display:flex;gap:10px;padding:14px 0;border-bottom:1px solid var(--line)}.feature:last-child{border:0}.num{font-size:9px;color:#71809a;min-width:21px}.feature b{font-size:11px}.feature p{font-size:10px;color:var(--muted);line-height:1.5;margin:4px 0 0}.providers{display:grid;grid-template-columns:1fr;gap:8px;margin-top:15px}.provider{border:1px solid var(--line);border-radius:10px;padding:11px;text-align:center;font-size:11px;color:#c8d3e7;background:#ffffff02}.provider.soon{opacity:.45}.note{font-size:10px;line-height:1.6;color:#71809a;margin-top:13px}
 .pills{display:flex;flex-wrap:wrap;gap:8px}.pill{border:1px solid var(--line);background:#080d17;color:#c8d3e7;font-size:11px;padding:9px 13px;border-radius:999px;cursor:pointer;user-select:none}.pill input{position:absolute;opacity:0;pointer-events:none}.pill.active{border-color:#7657ff99;background:#7657ff1c;color:#fff}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 footer{display:flex;justify-content:space-between;color:#5e6e88;font-size:9px;padding:18px 2px}
 @media(max-width:850px){.grid{grid-template-columns:1fr}.side{display:grid;grid-template-columns:1fr 1fr;gap:20px}}
-@media(max-width:600px){.wrap{width:calc(100% - 18px)}.hero{padding-top:52px}.hero h1{font-size:40px}.card{padding:19px}.summary,.side{grid-template-columns:1fr}.head{flex-direction:column}.badge{white-space:normal}}
+@media(max-width:600px){.wrap{width:calc(100% - 18px)}.hero{padding-top:52px}.hero h1{font-size:40px}.card{padding:19px}.summary{grid-template-columns:1fr}.head{flex-direction:column}.badge{white-space:normal}#sideToggle{display:block}.side{display:none}.side.open{display:grid}}
 </style>
 </head>
 <body>
 <div class="wrap">
+  <div id="configWarn" style="display:none;background:#ff7f8820;border:1px solid #ff7f88;border-radius:10px;padding:10px 14px;font-size:11px;color:#ffc7cb;margin-bottom:18px">
+    ⚠ N8N_WEBHOOK_URL is not configured. Edit the HTML and set your webhook URL before using this.
+  </div>
+
   <header class="top">
     <div class="brand">
       <div class="logo">AI</div>
@@ -35,17 +39,17 @@ footer{display:flex;justify-content:space-between;color:#5e6e88;font-size:9px;pa
   <section class="hero">
     <div class="eyebrow">AI WORKFLOW</div>
     <h1>Carry the useful context.<br><span>Leave the chat history behind.</span></h1>
-    <p>Paste a public chat share link and generate a compact context file for continuing the work in a new AI conversation.</p>
+    <p>Paste a public share link from Claude, ChatGPT, Gemini or Grok and get a compact context file for your next AI conversation.</p>
   </section>
 
   <section class="grid">
     <form class="card" id="form">
-      <div class="head"><div><div class="label">1 · SOURCE</div><h2>Provide your chat share URL</h2></div><div class="badge">n8n backend</div></div>
+      <div class="head"><div><div class="label">1 · SOURCE</div><h2>Provide your chat share URL</h2></div><div class="badge">AI Workflow</div></div>
 
       <div id="urlPanel" class="panel">
         <label for="url">Chat share URL</label>
         <input id="url" type="url" placeholder="https://claude.ai/share/00000000-0000-0000-0000-000000000000" required>
-        <div class="hint">Public share links only. Claude works today; other providers are recognized but not wired up yet (see the panel on the right).</div>
+        <div class="hint">Supported: claude.ai/share/... · chatgpt.com/share/... · gemini.google.com/share/... · grok.com/share/...</div>
       </div>
 
       <div class="panel">
@@ -80,11 +84,15 @@ footer{display:flex;justify-content:space-between;color:#5e6e88;font-size:9px;pa
         <div class="sum"><span>Output</span><strong id="sumOutput">.md file</strong></div>
         <div class="sum"><span>Budget</span><strong id="sumBudget">5,000 tok</strong></div>
         <div class="sum"><span>Use for</span><strong>New AI chat</strong></div>
+        <div class="sum"><span>Backend</span><strong>n8n</strong></div>
       </div>
 
       <button class="primary" id="submit" type="submit">Generate file →</button>
+      <div id="progress" style="display:none;margin-top:12px;font-size:11px;color:#9aa8c0"></div>
       <div class="msg" id="msg"></div>
     </form>
+
+    <button id="sideToggle" style="display:none;width:100%;margin:12px 0;border:1px solid var(--line);background:transparent;color:var(--muted);padding:10px;border-radius:10px;cursor:pointer">Show details ▾</button>
 
     <div class="side">
       <aside class="card">
@@ -100,16 +108,18 @@ footer{display:flex;justify-content:space-between;color:#5e6e88;font-size:9px;pa
         <div class="label">PROVIDERS</div>
         <div class="providers">
           <div class="provider">Claude ✓</div>
-          <div class="provider soon">ChatGPT — soon</div>
-          <div class="provider soon">Gemini — soon</div>
-          <div class="provider soon">Poe / Perplexity — soon</div>
+          <div class="provider">ChatGPT ✓</div>
+          <div class="provider">Gemini ✓</div>
+          <div class="provider">Grok ✓</div>
+          <div class="provider soon">Poe — soon</div>
+          <div class="provider soon">Perplexity — soon</div>
         </div>
-        <div class="note">The backend only has a working extractor for Claude share links right now. Other links are recognized and rejected with a clear message rather than failing silently.</div>
+        <div class="note">Extracts public share links from Claude, ChatGPT, Gemini and Grok. Poe and Perplexity support coming soon.</div>
       </aside>
     </div>
   </section>
 
-  <footer><span>AI Chat Context Exporter</span><span>Single-file frontend</span></footer>
+  <footer><span>AI Chat Context Exporter · v1.1</span><span>Claude · ChatGPT · Gemini · Grok</span></footer>
 </div>
 
 <script>
@@ -121,7 +131,11 @@ footer{display:flex;justify-content:space-between;color:#5e6e88;font-size:9px;pa
 // Can be overridden without editing this file by defining
 // `window.N8N_WEBHOOK_URL` in a small config.js loaded before this script.
 const N8N_WEBHOOK_URL = window.N8N_WEBHOOK_URL
-  || "https://YOUR-N8N-HOST/webhook/cb59919c-765a-4139-bd85-91f6bf123186";
+  || (window.location.protocol.startsWith('http') ? '/api/generate' : 'http://localhost:8000/api/generate');
+
+if (N8N_WEBHOOK_URL.includes('YOUR-VERCEL') || N8N_WEBHOOK_URL.includes('YOUR-N8N')) {
+  document.getElementById('configWarn').style.display = 'block';
+}
 
 const FORMAT_LABELS = { readme: ".md file", txt: ".txt file", doc: ".doc file", pdf: ".pdf file" };
 
@@ -144,12 +158,42 @@ function syncBudgetPills() {
     p.classList.toggle("active", input.checked);
   });
   const checked = document.querySelector('input[name="budget"]:checked');
-  $("sumBudget").textContent = checked.value === "dynamic" ? "All content" : Number(checked.value).toLocaleString() + " tok";
-  $("recent").disabled = checked.value === "dynamic";
+  if (checked) {
+    $("sumBudget").textContent = checked.value === "dynamic" ? "All content" : Number(checked.value).toLocaleString() + " tok";
+    $("recent").disabled = checked.value === "dynamic";
+  }
 }
 document.querySelectorAll('input[name="budget"]').forEach(el => el.addEventListener("change", syncBudgetPills));
 $("format").addEventListener("change", () => { $("sumOutput").textContent = FORMAT_LABELS[$("format").value]; });
+
+// ---- Restore last-used settings from localStorage ---------------------
+try {
+  const saved = JSON.parse(localStorage.getItem('ace_prefs') || '{}');
+  if (saved.budget) { const r = document.querySelector('input[name="budget"][value="'+saved.budget+'"]'); if (r) r.checked = true; }
+  if (saved.format) {
+    document.getElementById('format').value = saved.format;
+    if (FORMAT_LABELS[saved.format]) $("sumOutput").textContent = FORMAT_LABELS[saved.format];
+  }
+  if (saved.recent) document.getElementById('recent').value = saved.recent;
+  syncBudgetPills();
+} catch(_) {}
+
 syncBudgetPills();
+
+// ---- Mobile side panel toggle -----------------------------------------
+const sideToggle = document.getElementById('sideToggle');
+if (sideToggle) {
+  sideToggle.onclick = () => {
+    const side = document.querySelector('.side');
+    side.classList.toggle('open');
+    sideToggle.textContent = side.classList.contains('open') ? 'Hide details ▴' : 'Show details ▾';
+  };
+}
+
+// ---- Keyboard shortcut: Ctrl+Enter / Cmd+Enter ------------------------
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') document.getElementById('form').requestSubmit();
+});
 
 async function downloadResponse(res) {
   const blob = await res.blob();
@@ -165,6 +209,7 @@ async function downloadResponse(res) {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+  return blob;
 }
 
 $("form").onsubmit = async e => {
@@ -185,9 +230,19 @@ $("form").onsubmit = async e => {
   const format = $("format").value;
   const recent = $("recent").value || "8";
 
+  // Remember preferences
+  try { localStorage.setItem('ace_prefs', JSON.stringify({ budget, format, recent })); } catch(_) {}
+
   const btn = $("submit");
   btn.disabled = true;
-  btn.textContent = "Generating…";
+
+  // Step progress indicator
+  const steps = ['Fetching chat…','Extracting conversation…','Compressing context…','Building file…'];
+  let si = 0;
+  const prog = document.getElementById('progress');
+  prog.style.display = 'block';
+  prog.textContent = steps[0];
+  const iv = setInterval(() => { si = Math.min(si + 1, steps.length - 1); prog.textContent = steps[si]; }, 3000);
 
   const formData = new FormData();
   formData.append("url", chatUrl);
@@ -208,11 +263,34 @@ $("form").onsubmit = async e => {
       throw new Error("HTTP " + res.status + (detail ? " - " + detail : ""));
     }
 
-    await downloadResponse(res);
-    message("File generated. Download started.", true);
+    const size = res.headers.get('content-length');
+    const blob = await downloadResponse(res);
+
+    if (size) message('File generated (' + Math.round(size / 4).toLocaleString() + ' est. tokens). Download started.', true);
+    else message('File generated. Download started.', true);
+
+    if (blob.type.includes('markdown') || blob.type.includes('text') || format === 'readme' || format === 'txt') {
+      const copyBtn = document.createElement('button');
+      copyBtn.type = 'button';
+      copyBtn.textContent = 'Copy to clipboard';
+      copyBtn.style.cssText = 'display:inline-block;margin-left:10px;padding:4px 8px;font-size:10px;border-radius:6px;border:1px solid rgba(85,211,154,0.4);background:rgba(85,211,154,0.15);color:#b9eed4;cursor:pointer;vertical-align:middle;';
+      copyBtn.onclick = async () => {
+        try {
+          const text = await blob.text();
+          await navigator.clipboard.writeText(text);
+          copyBtn.textContent = 'Copied!';
+          setTimeout(() => { copyBtn.textContent = 'Copy to clipboard'; }, 2000);
+        } catch (_) {
+          copyBtn.textContent = 'Copy failed';
+        }
+      };
+      $("msg").appendChild(copyBtn);
+    }
   } catch (err) {
     message("Request failed: " + err.message + ". Check that the n8n workflow is active and N8N_WEBHOOK_URL is correct.");
   } finally {
+    clearInterval(iv);
+    prog.style.display = 'none';
     btn.disabled = false;
     btn.textContent = "Generate file →";
   }
