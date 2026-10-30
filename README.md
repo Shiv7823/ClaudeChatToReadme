@@ -143,3 +143,25 @@ To add or enable a new provider (e.g., Poe or Perplexity):
 ## License
 
 MIT License. Free for personal and commercial use.
+
+## Getting the chat in (extraction)
+
+The app no longer depends on any third-party extractor service. There are three ways in:
+
+1. **Paste chat text / file** (works for every AI, always). Paste the conversation, or load a
+   `.md` / `.txt` / `.json` file. Supported inputs: copied chat text with speaker labels
+   (`You:` / `Claude:` / `ChatGPT said:` …), Markdown exports, and `conversations.json`
+   exports from Claude or ChatGPT (the most recently updated chat is used).
+2. **claude.ai share link.** The server reads the public snapshot JSON that the share page itself
+   loads. No login is used. If claude.ai refuses requests from your host (common for cloud
+   providers), the app says so and points to option 1.
+3. **Optional external extractor.** Set the `EXTRACTOR_URL` environment variable to a service
+   that speaks the claude2pdf NDJSON protocol (`POST {"url": ...}` → `result` or
+   `result_start` / `html_chunk` / `result_end` lines). It is then used for every share link.
+
+The original public extractor (`claude2pdf.up.railway.app`) went offline (HTTP 404
+"Application Not Found"), which is why share-link requests started failing with
+`EXTRACTOR_OFFLINE`.
+
+Limits: pasted text is capped at 3 MB. Thinking and tool output are not included; artifacts and
+text attachments are included as code blocks when the source JSON provides them.

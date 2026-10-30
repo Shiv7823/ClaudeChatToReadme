@@ -92,8 +92,9 @@ async def general_exception_handler(request: Request, exc: Exception):
 # ============================================================================
 def prepare(body: Dict[str, Any]) -> Dict[str, Any]:
     raw_url = str(body.get('field-0') or body.get('Chat URL') or body.get('url') or '').strip()
-    if not raw_url:
-        raise HTTPException(400, "INVALID_URL: Please provide a chat share URL.")
+    text_in = str(body.get('text') or '').strip()
+    if not raw_url and not text_in:
+        raise HTTPException(400, "INVALID_URL: Please provide a chat share URL or paste the chat text.")
 
     budget_mode_raw = str(body.get('budgetMode') or 'fixed').lower()
     budget_mode = 'dynamic' if budget_mode_raw == 'dynamic' else 'fixed'
@@ -113,6 +114,21 @@ def prepare(body: Dict[str, Any]) -> Dict[str, Any]:
 
     format_raw = str(body.get('format') or 'readme').lower()
     fmt = format_raw if format_raw in ['readme', 'txt', 'doc', 'pdf'] else 'readme'
+
+    # Pasted text / uploaded file content: no URL needed
+    if text_in:
+        if len(text_in) > MAX_TEXT_CHARS:
+            raise HTTPException(400, "VALIDATION: The pasted text is over 3 MB. Trim it or split the chat.")
+        return {
+            'mode': 'text',
+            'text': text_in,
+            'cleanUrl': '',
+            'provider': 'paste',
+            'budget': budget,
+            'recent': recent,
+            'format': fmt,
+            'useLLM': False,
+        }
 
     # URL Cleaning
     clean_url = raw_url
@@ -159,6 +175,7 @@ def prepare(body: Dict[str, Any]) -> Dict[str, Any]:
     clean_url = 'https://' + host + path
 
     return {
+        'mode': 'url',
         'cleanUrl': clean_url,
         'provider': provider_def['key'],
         'budget': budget,
@@ -175,17 +192,21 @@ def decode_entities(s: str) -> str:
     return html.unescape(s.replace('&nbsp;', ' '))
 
 
-async def extract(clean_url: str, _provider: str) -> Dict[str, Any]:
+async def extract_via_service(clean_url: str, endpoint: str) -> Dict[str, Any]:
+    """Optional: call an external extractor that speaks the claude2pdf NDJSON protocol.
+    Enabled only when the EXTRACTOR_URL environment variable is set."""
     warnings: List[str] = []
+    origin_m = re.match(r'^https?://[^/]+', endpoint)
+    origin = origin_m.group(0) if origin_m else endpoint
 
     async with httpx.AsyncClient(timeout=120.0) as client:
         try:
             response = await client.post(
-                "https://claude2pdf.up.railway.app/api/extract",
+                endpoint,
                 headers={
                     "Content-Type": "application/json",
                     "Accept": "application/x-ndjson, application/json",
-                    "Origin": "https://claude2pdf.up.railway.app",
+                    "Origin": origin,
                 },
                 json={"url": clean_url},
             )
@@ -195,7 +216,9 @@ async def extract(clean_url: str, _provider: str) -> Dict[str, Any]:
             raise HTTPException(502, f"EXTRACTOR_ERROR: Failed to connect to extractor: {err}")
 
     if response.status_code == 429:
-        raise HTTPException(429, "RATE_LIMITED: Claude2PDF extractor is rate-limiting requests. Wait a few minutes or retry later.")
+        raise HTTPException(429, "RATE_LIMITED: The extractor service is rate-limiting requests. Wait a few minutes or retry later.")
+    if response.status_code == 404 and '"type"' not in response.text[:2000]:
+        raise HTTPException(502, f"EXTRACTOR_OFFLINE: The extractor service at {endpoint} is offline (HTTP 404). Use the Paste chat text option, or point EXTRACTOR_URL at a working service.")
 
     body_text = response.text
     if len(body_text) > 15000000:
@@ -326,6 +349,244 @@ async def extract(clean_url: str, _provider: str) -> Dict[str, Any]:
     title = re.sub(r'^[#\s]+', '', raw_first_line)[:60].strip() or 'chat'
 
     return {'turns': turns, 'warnings': warnings, 'title': title}
+
+
+# ----------------------------------------------------------------------------
+# 2b. Built-in extractors (no third-party extractor service needed)
+# ----------------------------------------------------------------------------
+MAX_TEXT_CHARS = 3_000_000
+SNAPSHOT_UA = "ChatContextExporter/1.1 (personal use; reads public share snapshots)"
+
+
+def _role_of(raw: Any) -> Optional[str]:
+    r = str(raw or '').lower()
+    if r in ('human', 'user'):
+        return 'user'
+    if r in ('assistant', 'claude', 'model', 'ai', 'bot'):
+        return 'assistant'
+    return None
+
+
+def _fence(lang: str, code: str) -> str:
+    return '```' + lang + '\n' + code.rstrip('\n') + '\n```'
+
+
+def _blocks_to_text(content: Any, notes: set) -> str:
+    """Claude-style message content: a string, or a list of typed blocks."""
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return ''
+    parts: List[str] = []
+    for b in content:
+        if not isinstance(b, dict):
+            continue
+        t = b.get('type')
+        if t == 'text' and isinstance(b.get('text'), str):
+            parts.append(b['text'])
+        elif t == 'tool_use':
+            inp = b.get('input') if isinstance(b.get('input'), dict) else {}
+            body = inp.get('content') or inp.get('file_text')
+            if isinstance(body, str) and body.strip():
+                title = str(inp.get('title') or inp.get('path') or '').strip()
+                parts.append(('[artifact: ' + title + ']\n' if title else '[artifact]\n')
+                             + _fence(str(inp.get('language') or '').strip(), body))
+                notes.add('Artifacts/files created in the chat were included as code blocks.')
+        # thinking, tool_result, image and unknown blocks are skipped on purpose
+    return '\n\n'.join(p for p in parts if p.strip())
+
+
+def _attachments_text(msg: Dict[str, Any]) -> str:
+    out: List[str] = []
+    for a in (msg.get('attachments') or []):
+        if isinstance(a, dict) and isinstance(a.get('extracted_content'), str) and a['extracted_content'].strip():
+            out.append('[attachment: ' + str(a.get('file_name') or 'file') + ']\n' + _fence('', a['extracted_content'][:6000]))
+    return '\n\n'.join(out)
+
+
+def _find_message_list(obj: Any, depth: int = 0) -> Optional[List[Dict[str, Any]]]:
+    if depth > 4:
+        return None
+    if isinstance(obj, dict):
+        for key in ('chat_messages', 'messages'):
+            v = obj.get(key)
+            if isinstance(v, list) and v and isinstance(v[0], dict):
+                return v
+        for v in obj.values():
+            r = _find_message_list(v, depth + 1)
+            if r:
+                return r
+    elif isinstance(obj, list) and obj and all(isinstance(x, dict) for x in obj[:3]):
+        if any(('sender' in x or 'role' in x) for x in obj[:3]):
+            return obj
+    return None
+
+
+def _turns_from_mapping(conv: Dict[str, Any]) -> List[Dict[str, str]]:
+    """ChatGPT conversations.json: follow current_node up through its parents."""
+    mapping = conv.get('mapping') or {}
+    node_id = conv.get('current_node')
+    if node_id not in mapping:
+        leaves = [k for k, v in mapping.items() if not v.get('children')]
+        node_id = leaves[-1] if leaves else None
+    chain: List[Dict[str, Any]] = []
+    seen = set()
+    while node_id and node_id in mapping and node_id not in seen:
+        seen.add(node_id)
+        chain.append(mapping[node_id])
+        node_id = mapping[node_id].get('parent')
+    chain.reverse()
+    turns: List[Dict[str, str]] = []
+    for node in chain:
+        msg = node.get('message')
+        if not isinstance(msg, dict):
+            continue
+        role = _role_of((msg.get('author') or {}).get('role'))
+        parts = (msg.get('content') or {}).get('parts')
+        if not role or not isinstance(parts, list):
+            continue
+        text = '\n'.join(x for x in parts if isinstance(x, str)).strip()
+        if text:
+            turns.append({'role': role, 'text': text})
+    return turns
+
+
+def turns_from_json(data: Any, warnings: List[str]) -> Dict[str, Any]:
+    """Claude snapshot / Claude export / ChatGPT export (single chat or a whole conversations.json)."""
+    if isinstance(data, list) and data and isinstance(data[0], dict) and ('mapping' in data[0] or 'chat_messages' in data[0]):
+        def stamp(c: Dict[str, Any]):
+            v = c.get('updated_at') or c.get('update_time') or c.get('created_at') or c.get('create_time') or 0
+            return (0, float(v)) if isinstance(v, (int, float)) else (1, str(v))
+        data = max(data, key=stamp)
+        warnings.append('The file holds several conversations; used the most recently updated one.')
+
+    turns: List[Dict[str, str]] = []
+    title = ''
+    if isinstance(data, dict) and isinstance(data.get('mapping'), dict):
+        turns = _turns_from_mapping(data)
+        title = str(data.get('title') or '')
+    else:
+        msgs = _find_message_list(data)
+        if msgs:
+            notes: set = set()
+            for m in msgs:
+                role = _role_of(m.get('sender') or m.get('role'))
+                if not role:
+                    continue
+                text = _blocks_to_text(m.get('content'), notes)
+                if not text.strip() and isinstance(m.get('text'), str):
+                    text = m['text']
+                if role == 'user':
+                    att = _attachments_text(m)
+                    if att:
+                        text = (text + '\n\n' + att).strip()
+                if text.strip():
+                    turns.append({'role': role, 'text': text.strip()})
+            warnings.extend(sorted(notes))
+        if isinstance(data, dict):
+            title = str(data.get('name') or data.get('snapshot_name') or data.get('title') or '')
+    return {'turns': turns, 'title': title}
+
+
+_H = re.compile(r'^\s*(?:#{1,4}\s*)?(?:\*\*)?(?:Human|User|You(?:\s+said)?|Eu|Voc\u00ea|Usu\u00e1rio)(?:\*\*)?\s*(?:[:\u2014\u2013-]|$)', re.I)
+_A = re.compile(r'^\s*(?:#{1,4}\s*)?(?:\*\*)?(?:Claude(?:\s+(?:said|responded))?|Assistant|AI|ChatGPT(?:\s+said)?|Gemini|Grok|Model|Response|Bot)(?:\*\*)?\s*(?:[:\u2014\u2013-]|$)', re.I)
+
+
+def turns_from_text(text: str, warnings: List[str]) -> List[Dict[str, str]]:
+    turns: List[Dict[str, Any]] = []
+    cur: Optional[Dict[str, Any]] = None
+    in_fence = False
+    for line in text.replace('\r\n', '\n').split('\n'):
+        if line.strip().startswith('```'):
+            in_fence = not in_fence
+        label = None if in_fence else (_H.match(line) or _A.match(line))
+        if label:
+            rest = re.sub(r'^\s*\*\*\s*', '', line[label.end():]).strip()
+            rest = re.sub(r'^[A-Z][a-z]{2,8}\.? \d{1,2},? \d{4}.*$', '', rest)  # "Feb 23, 2026, 10:30 AM"
+            cur = {'role': 'user' if _H.match(line) else 'assistant', 'lines': [rest] if rest else []}
+            turns.append(cur)
+        elif cur is not None and not re.match(r'^\s*Thought for \d+s\s*$', line):
+            cur['lines'].append(line)
+    out = [{'role': t['role'], 'text': re.sub(r'\n{3,}', '\n\n', '\n'.join(t['lines'])).strip()} for t in turns]
+    out = [t for t in out if t['text']]
+    if len(out) < 2:
+        warnings.append('No speaker labels (like "You:" / "Claude:") were detected, so the text was treated as one message. Paste with labels for better results.')
+        out = [{'role': 'user', 'text': text.strip()}]
+    return out
+
+
+def _title_from(turns: List[Dict[str, str]], hint: str = '') -> str:
+    if hint.strip():
+        return hint.strip()[:60]
+    first_user = next((t for t in turns if t['role'] == 'user'), turns[0])
+    first_line = first_user['text'].split('\n')[0]
+    return re.sub(r'^[#\s]+', '', first_line)[:60].strip() or 'chat'
+
+
+def parse_pasted_text(text: str) -> Dict[str, Any]:
+    warnings: List[str] = []
+    stripped = text.strip()
+    turns: List[Dict[str, str]] = []
+    hint = ''
+    if stripped[:1] in ('{', '['):
+        try:
+            data = json.loads(stripped)
+        except Exception:
+            data = None
+        if data is not None:
+            res = turns_from_json(data, warnings)
+            turns, hint = res['turns'], res['title']
+            if not turns:
+                warnings.append('The JSON was readable but no chat messages were recognized; treated it as plain text.')
+    if not turns:
+        turns = turns_from_text(text, warnings)
+    return {'turns': turns, 'warnings': warnings, 'title': _title_from(turns, hint)}
+
+
+async def extract_claude_snapshot(clean_url: str) -> Dict[str, Any]:
+    """Read the public JSON that a claude.ai share page loads for itself. No login is used;
+    if claude.ai refuses the request we stop and point the user to the paste option."""
+    m = re.search(r'/share/([0-9a-fA-F-]{36})$', clean_url)
+    if not m:
+        raise HTTPException(400, "INVALID_URL: Not a valid claude.ai share link.")
+    api = f"https://claude.ai/api/chat_snapshots/{m.group(1)}?rendering_mode=messages&render_all_tools=true"
+    try:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
+            r = await client.get(api, headers={"Accept": "application/json", "User-Agent": SNAPSHOT_UA, "Referer": clean_url})
+    except httpx.TimeoutException:
+        raise HTTPException(502, "EXTRACTOR_TIMEOUT: claude.ai did not answer within 30 seconds. Try again, or use the Paste chat text option.")
+    except Exception as err:
+        raise HTTPException(502, f"EXTRACTOR_ERROR: Could not reach claude.ai: {err}")
+
+    if r.status_code == 404:
+        raise HTTPException(404, "NOT_PUBLIC_OR_EXPIRED: This share link was not found. It may be private, deleted, or expired.")
+    if r.status_code == 429:
+        raise HTTPException(429, "RATE_LIMITED: claude.ai is rate-limiting this server. Wait a few minutes, or use the Paste chat text option.")
+    if r.status_code >= 500:
+        raise HTTPException(502, f"EXTRACTOR_ERROR: claude.ai had a problem (HTTP {r.status_code}). Try again shortly, or use the Paste chat text option.")
+    if r.status_code >= 400:
+        raise HTTPException(502, f"EXTRACTOR_BLOCKED: claude.ai refused the request from this server (HTTP {r.status_code}). This is common for cloud hosts. Open the share link in your browser, copy the conversation, and use the Paste chat text option.")
+    try:
+        data = r.json()
+    except Exception:
+        raise HTTPException(502, "EXTRACTOR_BLOCKED: claude.ai returned a web page instead of chat data (likely a bot check). Use the Paste chat text option.")
+
+    warnings: List[str] = ['Imported from the public share snapshot. Thinking and tool output are not included.']
+    res = turns_from_json(data, warnings)
+    if not res['turns']:
+        raise HTTPException(502, "PARSE_FAILED: The share data had an unexpected format. Use the Paste chat text option.")
+    return {'turns': res['turns'], 'warnings': warnings, 'title': _title_from(res['turns'], res['title'])}
+
+
+async def extract(prep: Dict[str, Any]) -> Dict[str, Any]:
+    if prep.get('mode') == 'text':
+        return parse_pasted_text(prep['text'])
+    endpoint = os.environ.get('EXTRACTOR_URL', '').strip()
+    if endpoint:
+        return await extract_via_service(prep['cleanUrl'], endpoint)
+    if prep['provider'] == 'claude':
+        return await extract_claude_snapshot(prep['cleanUrl'])
+    raise HTTPException(400, f"UNSUPPORTED_PROVIDER: {prep['provider'].title()} share links cannot be fetched directly. Open the link, copy the conversation, and use the Paste chat text option (or set EXTRACTOR_URL to a compatible extractor service).")
 
 
 # ============================================================================
@@ -1220,7 +1481,7 @@ async def api_info():
         content={
             "status": "online",
             "service": "AI Chat Context Exporter API",
-            "usage": "Send POST request with form-data (url, budgetMode, budgetValue, recent, format) to /api/generate",
+            "usage": "Send POST form-data (url OR text, budgetMode, budgetValue, recent, format) to /api/generate",
         },
         headers=CORS_HEADERS,
     )
@@ -1268,7 +1529,7 @@ async def generate_endpoint(request: Request):
 
     # Pipeline execution
     prep = prepare(body_fields)
-    extracted = await extract(prep['cleanUrl'], prep['provider'])
+    extracted = await extract(prep)
     compressed = compress({
         'title': extracted['title'],
         'turns': extracted['turns'],

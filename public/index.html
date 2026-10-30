@@ -16,6 +16,7 @@ label{display:block;color:#cdd7e9;font-size:12px;font-weight:600;margin-bottom:8
 button.primary{width:100%;border:0;color:#fff;padding:14px;border-radius:12px;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));cursor:pointer}.primary:disabled{opacity:.65;cursor:not-allowed}.msg{display:none;padding:11px 12px;border-radius:10px;font-size:11px;line-height:1.5;margin-top:12px}.msg.show{display:block}.ok{color:#b9eed4;background:#55d39a12;border:1px solid #55d39a35}.bad{color:#ffc7cb;background:#ff7f8812;border:1px solid #ff7f8835}
 .feature{display:flex;gap:10px;padding:14px 0;border-bottom:1px solid var(--line)}.feature:last-child{border:0}.num{font-size:9px;color:#71809a;min-width:21px}.feature b{font-size:11px}.feature p{font-size:10px;color:var(--muted);line-height:1.5;margin:4px 0 0}.providers{display:grid;grid-template-columns:1fr;gap:8px;margin-top:15px}.provider{border:1px solid var(--line);border-radius:10px;padding:11px;text-align:center;font-size:11px;color:#c8d3e7;background:#ffffff02}.provider.soon{opacity:.45}.note{font-size:10px;line-height:1.6;color:#71809a;margin-top:13px}
 .pills{display:flex;flex-wrap:wrap;gap:8px}.pill{border:1px solid var(--line);background:#080d17;color:#c8d3e7;font-size:11px;padding:9px 13px;border-radius:999px;cursor:pointer;user-select:none}.pill input{position:absolute;opacity:0;pointer-events:none}.pill.active{border-color:#7657ff99;background:#7657ff1c;color:#fff}
+textarea{width:100%;padding:13px 14px;background:#080d17;color:var(--text);border:1px solid var(--line);border-radius:11px;outline:none;font:12px/1.55 ui-monospace,Consolas,monospace;resize:vertical}textarea:focus{border-color:#7657ff99;box-shadow:0 0 0 4px #7657ff14}input[type=file]{padding:9px 10px;font-size:11px;color:var(--muted)}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 footer{display:flex;justify-content:space-between;color:#5e6e88;font-size:9px;padding:18px 2px}
 @media(max-width:850px){.grid{grid-template-columns:1fr}.side{display:grid;grid-template-columns:1fr 1fr;gap:20px}}
@@ -35,7 +36,7 @@ footer{display:flex;justify-content:space-between;color:#5e6e88;font-size:9px;pa
   <section class="hero">
     <div class="eyebrow">AI WORKFLOW</div>
     <h1>Carry the useful context.<br><span>Leave the chat history behind.</span></h1>
-    <p>Paste a public share link from Claude, ChatGPT, Gemini or Grok and get a compact context file to continue work in a new AI conversation.</p>
+    <p>Paste a share link or the chat itself from Claude, ChatGPT, Gemini, Grok or any AI, and get a compact context file to continue the work in a new conversation.</p>
   </section>
 
   <div id="configWarn" style="display:none;background:#ff7f8820;border:1px solid #ff7f88;border-radius:10px;padding:10px 14px;font-size:11px;color:#ffc7cb;margin-bottom:18px">
@@ -44,12 +45,24 @@ footer{display:flex;justify-content:space-between;color:#5e6e88;font-size:9px;pa
 
   <section class="grid">
     <form class="card" id="form">
-      <div class="head"><div><div class="label">1 · SOURCE</div><h2>Provide your chat share URL</h2></div><div class="badge">AI Workflow</div></div>
+      <div class="head"><div><div class="label">1 · SOURCE</div><h2>Choose how to provide the chat</h2></div><div class="badge">AI Workflow</div></div>
+
+      <div class="pills" id="srcPills" style="margin-top:18px">
+        <label class="pill active"><input type="radio" name="src" value="link" checked>Share link</label>
+        <label class="pill"><input type="radio" name="src" value="text">Paste chat text / file</label>
+      </div>
 
       <div id="urlPanel" class="panel">
         <label for="url">Chat share URL</label>
         <input id="url" type="url" placeholder="https://claude.ai/share/00000000-0000-0000-0000-000000000000" required>
-        <div class="hint">Supported: claude.ai/share/... · chatgpt.com/share/... · gemini.google.com/share/... · grok.com/share/...</div>
+        <div class="hint">Direct import works for claude.ai/share/… links when claude.ai allows server access. For ChatGPT, Gemini, Grok or any other AI, use “Paste chat text / file”.</div>
+      </div>
+
+      <div id="textPanel" class="panel" style="display:none">
+        <label for="text">Chat text</label>
+        <textarea id="text" rows="9" placeholder="Paste the whole conversation here, or load a file below. Works with any AI."></textarea>
+        <div style="margin-top:10px"><input id="file" type="file" accept=".md,.markdown,.txt,.json"></div>
+        <div class="hint">Accepts copied chat text (speaker labels such as “You:” / “Claude:” are detected), a Markdown export, or a conversations.json export from Claude or ChatGPT (largest-recent chat is used). Max 3 MB.</div>
       </div>
 
       <div class="panel">
@@ -105,14 +118,13 @@ footer{display:flex;justify-content:space-between;color:#5e6e88;font-size:9px;pa
       <aside class="card">
         <div class="label">PROVIDERS</div>
         <div class="providers">
-          <div class="provider">Claude ✓</div>
-          <div class="provider">ChatGPT ✓</div>
-          <div class="provider">Gemini ✓</div>
-          <div class="provider">Grok ✓</div>
-          <div class="provider soon">Poe — soon</div>
-          <div class="provider soon">Perplexity — soon</div>
+          <div class="provider">Claude — link or paste ✓</div>
+          <div class="provider">ChatGPT — paste / export file ✓</div>
+          <div class="provider">Gemini — paste ✓</div>
+          <div class="provider">Grok — paste ✓</div>
+          <div class="provider">Any other AI — paste ✓</div>
         </div>
-        <div class="note">Extracts public share links from Claude, ChatGPT, Gemini and Grok. Poe and Perplexity support coming soon.</div>
+        <div class="note">Pasting always works. Link import depends on each provider allowing server access to its share pages.</div>
       </aside>
     </div>
 
@@ -175,6 +187,25 @@ try {
 
 syncBudgetPills();
 
+// ---- Source switching: share link vs pasted text / file ------------------
+function syncSrc() {
+  const mode = document.querySelector('input[name="src"]:checked').value;
+  document.querySelectorAll('#srcPills .pill').forEach(p => p.classList.toggle('active', p.querySelector('input').checked));
+  $("urlPanel").style.display = mode === 'link' ? 'block' : 'none';
+  $("textPanel").style.display = mode === 'text' ? 'block' : 'none';
+  $("url").required = mode === 'link';
+  return mode;
+}
+document.querySelectorAll('input[name="src"]').forEach(el => el.addEventListener('change', syncSrc));
+$("file").addEventListener('change', async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  if (f.size > 3 * 1024 * 1024) { message("That file is over 3 MB."); e.target.value = ''; return; }
+  $("text").value = await f.text();
+  message("Loaded " + f.name + ".", true);
+});
+syncSrc();
+
 // ---- Keyboard shortcut: Ctrl+Enter / Cmd+Enter ------------------------
 document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
@@ -203,10 +234,16 @@ $("form").onsubmit = async e => {
   e.preventDefault();
   clearMessage();
 
+  const mode = syncSrc();
   const chatUrl = $("url").value.trim();
+  const chatText = $("text").value.trim();
 
-  if (!/^https:\/\/[^\s]+$/i.test(chatUrl)) {
+  if (mode === 'link' && !/^https:\/\/[^\s]+$/i.test(chatUrl)) {
     message("Please enter a full https:// share link.");
+    return;
+  }
+  if (mode === 'text' && chatText.length < 20) {
+    message("Paste the chat text (or load a file) first.");
     return;
   }
 
@@ -240,7 +277,8 @@ $("form").onsubmit = async e => {
   }, 3500);
 
   const formData = new FormData();
-  formData.append("url", chatUrl);
+  if (mode === 'text') formData.append("text", chatText);
+  else formData.append("url", chatUrl);
   formData.append("budgetMode", budget === "dynamic" ? "dynamic" : "fixed");
   formData.append("budgetValue", budget === "dynamic" ? "" : budget);
   formData.append("recent", recent);
@@ -287,7 +325,11 @@ $("form").onsubmit = async e => {
       $("msg").appendChild(copyBtn);
     }
   } catch (err) {
-    message("Request failed: " + err.message + ". Check your endpoint URL.");
+    const msg = String(err.message);
+    let hint = '';
+    if (/EXTRACTOR_|UNSUPPORTED_PROVIDER|NOT_PUBLIC/.test(msg)) hint = ' → Use the “Paste chat text / file” option: it works for any AI and needs no link access.';
+    else if (msg === 'Failed to fetch') hint = ' Check that the server is running and the endpoint URL is correct.';
+    message("Request failed: " + msg + hint);
   } finally {
     clearInterval(iv);
     prog.style.display = 'none';
