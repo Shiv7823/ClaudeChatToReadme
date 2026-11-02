@@ -4,7 +4,12 @@ const { JSDOM } = require('jsdom');
 function createBookmarkletFunction() {
   return function bookmarklet(APP) {
     /* Self-contained Chat Context Exporter Bookmarklet */
-    var ID = '__ace_chat_exporter_overlay__';
+    var ID = '__ace_chat_exporter_overlay__', CBOX = {
+      position: 'fixed', top: '16px', right: '16px', width: '340px', maxWidth: 'calc(100vw - 32px)',
+      backgroundColor: '#0d1422', color: '#f1f5ff', border: '1px solid #253149', borderRadius: '14px',
+      boxShadow: '0 20px 50px rgba(0,0,0,0.65)', padding: '16px', zIndex: '2147483647',
+      fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: '13px', lineHeight: '1.5'
+    };
 
     function st(e, s) {
       if (e && s) {
@@ -20,6 +25,16 @@ function createBookmarkletFunction() {
       if (txt !== undefined && txt !== null) e.textContent = txt;
       if (p) p.appendChild(e);
       return e;
+    }
+
+    function showStatus(t, s) {
+      var old = document.getElementById(ID);
+      if (old && old.parentNode) old.parentNode.removeChild(old);
+      var el = mk('div', CBOX, document.body);
+      el.id = ID;
+      mk('div', { fontWeight: '700', fontSize: '13px', color: '#60a5fa', marginBottom: '4px' }, el, '⚡ ' + t);
+      mk('div', { color: '#94a3b8', fontSize: '12px' }, el, s || 'Please hold on…');
+      return el;
     }
 
     function skip(n) {
@@ -249,118 +264,120 @@ function createBookmarkletFunction() {
       var dg = payload.diagnostics || {}, pn = (payload.provider || 'AI').toUpperCase();
       var mc = (typeof dg.total_messages === 'number') ? dg.total_messages : (payload.messages ? payload.messages.length : 0);
 
-      var ov = mk('div', {
-        position: 'fixed', top: '16px', right: '16px', width: '360px', maxWidth: 'calc(100vw - 32px)',
-        backgroundColor: '#0d1422', color: '#f1f5ff', border: '1px solid #253149', borderRadius: '14px',
-        boxShadow: '0 20px 50px rgba(0,0,0,0.65)', padding: '16px', zIndex: '2147483647',
-        fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: '13px', lineHeight: '1.5'
-      }, document.body);
-      ov.id = ID;
+      var ov = mk('div', CBOX, document.body);
+    ov.id = ID;
 
-      var cl = mk('button', {
-        position: 'absolute', top: '10px', right: '12px', background: 'none', border: 'none',
-        color: '#9aa8c0', fontSize: '20px', cursor: 'pointer', padding: '2px 6px', lineHeight: '1'
-      }, ov, '×');
-      cl.addEventListener('click', function() { if (ov.parentNode) ov.parentNode.removeChild(ov); });
+    var cl = mk('button', {
+      position: 'absolute', top: '10px', right: '12px', background: 'none', border: 'none',
+      color: '#9aa8c0', fontSize: '20px', cursor: 'pointer', padding: '2px 6px', lineHeight: '1'
+    }, ov, '×');
+    cl.addEventListener('click', function() { if (ov.parentNode) ov.parentNode.removeChild(ov); });
 
-      mk('div', { fontWeight: '700', fontSize: '14px', color: '#fff', paddingRight: '20px', marginBottom: '4px' }, ov, 'Captured ' + mc + ' messages from ' + pn);
-      var ml = (dg.method === 'snapshot') ? 'Snapshot' : 'DOM';
-      mk('div', { fontSize: '11px', color: '#9aa8c0', marginBottom: '10px' }, ov, ml + ' · ' + (dg.user_count||0) + ' user, ' + (dg.assistant_count||0) + ' assistant · ' + (dg.total_chars||0).toLocaleString() + ' chars');
+    mk('div', { fontWeight: '700', fontSize: '14px', color: '#fff', paddingRight: '20px', marginBottom: '4px' }, ov, 'Captured ' + mc + ' messages from ' + pn);
+    var ml = (dg.method === 'snapshot') ? 'Snapshot' : 'DOM';
+    mk('div', { fontSize: '11px', color: '#9aa8c0', marginBottom: '10px' }, ov, ml + ' · ' + (dg.user_count||0) + ' user, ' + (dg.assistant_count||0) + ' assistant · ' + (dg.total_chars||0).toLocaleString() + ' chars');
 
-      var ws = dg.warnings || [];
-      if (ws.length) {
-        var wb = mk('div', { backgroundColor: 'rgba(255,127,136,0.12)', border: '1px solid rgba(255,127,136,0.35)', borderRadius: '8px', padding: '6px 8px', fontSize: '11px', color: '#ffc7cb', marginBottom: '10px' }, ov);
-        for (var w = 0; w < ws.length; w++) mk('div', null, wb, '⚠ ' + ws[w]);
-      }
-      if (dg.unmatched_selectors && dg.unmatched_selectors.length) {
-        mk('div', { fontSize: '10px', color: '#71809a', marginBottom: '10px' }, ov, 'Unmatched: ' + dg.unmatched_selectors.join(', '));
-      }
-
-      var alb = mk('div', { display: 'none', fontSize: '11px', borderRadius: '8px', padding: '6px 8px', marginBottom: '10px' }, ov);
-      var rw = mk('div', { display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }, ov);
-
-      function addBtn(lbl, bg, fn) {
-        var b = mk('button', {
-          flex: bg ? '1 1 100%' : '1 1 auto', padding: bg ? '10px 14px' : '8px 10px', borderRadius: '8px',
-          border: bg ? 'none' : '1px solid #253149', background: bg || '#141d30', color: bg ? '#fff' : '#cdd7e9',
-          fontWeight: bg ? '600' : 'normal', cursor: 'pointer', fontSize: bg ? '12px' : '11px'
-        }, rw, lbl);
-        b.addEventListener('click', fn);
-        return b;
-      }
-
-      var bo, bc, bd;
-      bo = addBtn('Open in Context Exporter', 'linear-gradient(135deg, #7657ff, #4f90ff)', async function() {
-        bo.textContent = 'Compressing…'; bo.disabled = true;
-        try {
-          var enc = await tl.compressGzipBase64Url(JSON.stringify(payload));
-          if (enc.length > 1500000) {
-            alb.textContent = 'Compressed chat is over 1.5 MB (exceeds URL limit). Please use [Download .json] below and load the file into Context Exporter.';
-            st(alb, { display: 'block', backgroundColor: 'rgba(255,127,136,0.15)', border: '1px solid #ff7f88', color: '#ffc7cb' });
-            bo.textContent = 'Payload too large for URL';
-            st(bd, { boxShadow: '0 0 0 2px #55d39a' });
-            return;
-          }
-          window.open(appUrl + '/#ace=' + enc, '_blank');
-          bo.textContent = 'Opened in new tab!';
-          setTimeout(function() { bo.textContent = 'Open in Context Exporter'; bo.disabled = false; }, 3000);
-        } catch (e) {
-          alb.textContent = 'Transfer error: ' + (e.message || 'compression error');
-          st(alb, { display: 'block', backgroundColor: 'rgba(255,127,136,0.15)', border: '1px solid #ff7f88', color: '#ffc7cb' });
-          bo.textContent = 'Open in Context Exporter'; bo.disabled = false;
-        }
-      });
-
-      bc = addBtn('Copy as text', null, async function() {
-        var txt = '';
-        if (payload.messages && payload.messages.length) {
-          txt = payload.messages.map(function(m) { return (m.role === 'user' ? 'User:' : 'Assistant:') + '\n' + m.text; }).join('\n\n');
-        } else {
-          txt = JSON.stringify(payload.snapshot || payload, null, 2);
-        }
-        try {
-          if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(txt);
-          else {
-            var ta = document.createElement('textarea');
-            ta.value = txt; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
-          }
-          bc.textContent = 'Copied!';
-          setTimeout(function() { bc.textContent = 'Copy as text'; }, 2000);
-        } catch (_) { bc.textContent = 'Copy failed'; }
-      });
-
-      bd = addBtn('Download .json', null, function() {
-        var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }), u = URL.createObjectURL(blob);
-        var a = document.createElement('a'); a.href = u; a.download = 'chat-context-' + (payload.provider || 'chat') + '-' + Date.now() + '.json';
-        document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(u);
-        bd.textContent = 'Downloaded!';
-        setTimeout(function() { bd.textContent = 'Download .json'; }, 2000);
-      });
-
-      return ov;
+    var ws = dg.warnings || [];
+    if (ws.length) {
+      var wb = mk('div', { backgroundColor: 'rgba(255,127,136,0.12)', border: '1px solid rgba(255,127,136,0.35)', borderRadius: '8px', padding: '6px 8px', fontSize: '11px', color: '#ffc7cb', marginBottom: '10px' }, ov);
+      for (var w = 0; w < ws.length; w++) mk('div', null, wb, '⚠ ' + ws[w]);
+    }
+    if (dg.unmatched_selectors && dg.unmatched_selectors.length) {
+      mk('div', { fontSize: '10px', color: '#71809a', marginBottom: '10px' }, ov, 'Unmatched: ' + dg.unmatched_selectors.join(', '));
     }
 
-    async function run() {
-      var u = new URL(location.href), adp = null;
-      for (var i = 0; i < ADAPTERS.length; i++) {
-        if (ADAPTERS[i].match(u)) { adp = ADAPTERS[i]; break; }
+    var alb = mk('div', { display: 'none', fontSize: '11px', borderRadius: '8px', padding: '6px 8px', marginBottom: '10px' }, ov);
+    function setErr(m) {
+      alb.textContent = m;
+      st(alb, { display: 'block', backgroundColor: 'rgba(255,127,136,0.15)', border: '1px solid #ff7f88', color: '#ffc7cb' });
+    }
+    var rw = mk('div', { display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }, ov);
+
+    function addBtn(lbl, bg, fn) {
+      var b = mk('button', {
+        flex: bg ? '1 1 100%' : '1 1 auto', padding: bg ? '10px 14px' : '8px 10px', borderRadius: '8px',
+        border: bg ? 'none' : '1px solid #253149', background: bg || '#141d30', color: bg ? '#fff' : '#cdd7e9',
+        fontWeight: bg ? '600' : 'normal', cursor: 'pointer', fontSize: bg ? '12px' : '11px'
+      }, rw, lbl);
+      b.addEventListener('click', fn);
+      return b;
+    }
+
+    var bo, bc, bd;
+    bo = addBtn('Open in Context Exporter', 'linear-gradient(135deg, #2563eb, #3b82f6)', async function() {
+      bo.textContent = 'Compressing chat (' + mc + ' msgs)… Please hold on…'; bo.disabled = true;
+      try {
+        var enc = await tl.compressGzipBase64Url(JSON.stringify(payload));
+        if (enc.length > 1500000) {
+          setErr('Compressed chat is over 1.5 MB. Use [Download .json] below.');
+          bo.textContent = 'Payload too large for URL';
+          st(bd, { boxShadow: '0 0 0 2px #55d39a' });
+          return;
+        }
+        window.open(appUrl + '/#ace=' + enc, '_blank');
+        bo.textContent = 'Opened in new tab!';
+        setTimeout(function() { bo.textContent = 'Open in Context Exporter'; bo.disabled = false; }, 3000);
+      } catch (e) {
+        setErr('Transfer error: ' + (e.message || 'error'));
+        bo.textContent = 'Open in Context Exporter'; bo.disabled = false;
       }
-      if (!adp) {
-        adp = {
-          name: 'generic',
-          capture: async function(uri, rep, tl) {
-            rep.method = 'dom'; rep.warnings.push('Unknown provider (' + uri.hostname + '); captured page text as one message.');
-            var me = document.querySelector('main') || document.querySelector('article') || document.body;
-            return { v: 1, provider: 'generic', url: uri.href, title: document.title || 'Chat Export', messages: [{ role: 'user', text: tl.domToMarkdown(me) || 'No readable chat content.' }], diagnostics: rep };
-          }
-        };
+    });
+
+    bc = addBtn('Copy as text', null, async function() {
+      var txt = '';
+      if (payload.messages && payload.messages.length) {
+        txt = payload.messages.map(function(m) { return (m.role === 'user' ? 'User:' : 'Assistant:') + '\n' + m.text; }).join('\n\n');
+      } else {
+        txt = JSON.stringify(payload.snapshot || payload, null, 2);
       }
-      var rep = { provider: adp.name, method: 'dom', user_count: 0, assistant_count: 0, total_messages: 0, total_chars: 0, warnings: [], unmatched_selectors: [] };
-      var tl = { domToMarkdown: domToMarkdown, compressGzipBase64Url: compressGzipBase64Url };
-      try { await autoScroll(); } catch (_) {}
-      var payload;
-      try { payload = await adp.capture(u, rep, tl); } catch (e) {
-        rep.warnings.push('Capture failed: ' + (e.message || 'error'));
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(txt);
+        else {
+          var ta = document.createElement('textarea');
+          ta.value = txt; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+        }
+        bc.textContent = 'Copied!';
+        setTimeout(function() { bc.textContent = 'Copy as text'; }, 2000);
+      } catch (_) { bc.textContent = 'Copy failed'; }
+    });
+
+    bd = addBtn('Download .json', null, function() {
+      var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }), u = URL.createObjectURL(blob);
+      var a = document.createElement('a'); a.href = u; a.download = 'chat-context-' + (payload.provider || 'chat') + '-' + Date.now() + '.json';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(u);
+      bd.textContent = 'Downloaded!';
+      setTimeout(function() { bd.textContent = 'Download .json'; }, 2000);
+    });
+
+    return ov;
+  }
+
+  async function run() {
+    var u = new URL(location.href), adp = null;
+    for (var i = 0; i < ADAPTERS.length; i++) {
+      if (ADAPTERS[i].match(u)) { adp = ADAPTERS[i]; break; }
+    }
+    if (!adp) {
+      adp = {
+        name: 'generic',
+        capture: async function(uri, rep, tl) {
+          rep.method = 'dom'; rep.warnings.push('Unknown provider (' + uri.hostname + '); captured page text as one message.');
+          var me = document.querySelector('main') || document.querySelector('article') || document.body;
+          return { v: 1, provider: 'generic', url: uri.href, title: document.title || 'Chat Export', messages: [{ role: 'user', text: tl.domToMarkdown(me) || 'No readable chat content.' }], diagnostics: rep };
+        }
+      };
+    }
+    var rep = { provider: adp.name, method: 'dom', user_count: 0, assistant_count: 0, total_messages: 0, total_chars: 0, warnings: [], unmatched_selectors: [] };
+    var tl = { domToMarkdown: domToMarkdown, compressGzipBase64Url: compressGzipBase64Url };
+    showStatus('Context Exporter', 'Scanning chat… Long chats take a moment.');
+    try {
+      showStatus('Loading History', 'Scrolling to load all messages…');
+      await autoScroll();
+    } catch (_) {}
+    showStatus('Extracting Chat', 'Reading messages and code blocks…');
+    var payload;
+    try { payload = await adp.capture(u, rep, tl); } catch (e) {
+      rep.warnings.push('Capture failed: ' + (e.message || 'error'));
         payload = { v: 1, provider: adp.name, url: u.href, title: document.title || 'Chat', messages: [{ role: 'user', text: 'Error.' }], diagnostics: rep };
       }
       if (payload.messages && Array.isArray(payload.messages)) {

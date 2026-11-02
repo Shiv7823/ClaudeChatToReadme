@@ -167,6 +167,23 @@ kbd{display:inline-block;padding:2px 5px;font-size:10px;font-family:ui-monospace
 .details-block{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
 .details-block strong{color:var(--text);display:block;margin-bottom:3px}
 
+/* Real-time Progress & Activity Log Box */
+.log-box{margin-top:16px;border:1px solid var(--line);border-radius:10px;background:var(--bg-subtle);overflow:hidden;transition:all .2s ease}
+.log-header{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--card);border-bottom:1px solid var(--line)}
+.log-title{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--text)}
+.log-spinner{width:12px;height:12px;border:2px solid var(--line-strong);border-top-color:var(--accent);border-radius:50%;display:inline-block;animation:logSpin .75s linear infinite}
+@keyframes logSpin{to{transform:rotate(360deg)}}
+.log-timer{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-surface);padding:3px 8px;border-radius:6px;border:1px solid var(--accent-surface)}
+.log-track{height:4px;background:var(--line);width:100%;overflow:hidden}
+.log-bar{height:100%;background:var(--accent);width:8%;transition:width .4s ease}
+.log-status{padding:10px 14px;font-size:12px;font-weight:600;color:var(--text);border-bottom:1px solid var(--line);background:var(--card-subtle);display:flex;align-items:center;gap:8px}
+.log-terminal{padding:10px 14px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;line-height:1.65;max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:5px;background:var(--code-bg);color:var(--text-secondary)}
+.log-entry{display:flex;gap:8px;align-items:baseline}
+.log-time{color:var(--text-muted);user-select:none;font-weight:600;min-width:38px}
+.log-msg{color:var(--text)}
+.log-msg.highlight{color:var(--accent);font-weight:600}
+.log-note{padding:8px 14px;font-size:11px;color:var(--text-secondary);background:var(--card);border-top:1px solid var(--line);line-height:1.45}
+
 footer{display:flex;justify-content:space-between;color:var(--text-muted);font-size:11px;padding:24px 2px 0;border-top:1px solid var(--line);margin-top:36px}
 @media(max-width:850px){.grid{grid-template-columns:1fr}.side{display:grid;grid-template-columns:1fr 1fr;gap:20px}}
 @media(max-width:600px){.wrap{width:calc(100% - 20px)}.hero{padding-top:36px}.hero h1{font-size:32px}.card{padding:18px}.summary{grid-template-columns:1fr 1fr}.head{flex-direction:column}.badge{white-space:normal}#sideToggle{display:block}.side{display:none}.side.open{display:grid}}
@@ -354,7 +371,25 @@ footer{display:flex;justify-content:space-between;color:var(--text-muted);font-s
 
       <button class="primary" id="submit" type="submit">Waiting for chat capture…</button>
       <div class="msg" id="msg"></div>
-      <div id="progress" style="display:none;margin-top:12px;font-size:12px;color:var(--text-secondary);line-height:1.8"></div>
+      <div id="progress" class="log-box" style="display:none">
+        <div class="log-header">
+          <div class="log-title">
+            <span class="log-spinner"></span>
+            <span id="logTitleText">Processing conversation…</span>
+          </div>
+          <div class="log-timer" id="logTimer">00:00</div>
+        </div>
+        <div class="log-track">
+          <div class="log-bar" id="logBarFill"></div>
+        </div>
+        <div class="log-status" id="logStatusText">
+          <span>🔍</span> <span>Analyzing input…</span>
+        </div>
+        <div class="log-terminal" id="logConsole"></div>
+        <div class="log-note" id="logNotice">
+          ⏳ Long conversations take a little time to analyze and structure. Please hold on…
+        </div>
+      </div>
     </form>
 
     <div class="side">
@@ -498,7 +533,12 @@ syncSrc();
 /* ---- Self-contained Bookmarklet Function Definition -------------------- */
 function bookmarklet(APP) {
   /* Self-contained Chat Context Exporter Bookmarklet */
-  var ID = '__ace_chat_exporter_overlay__';
+  var ID = '__ace_chat_exporter_overlay__', CBOX = {
+    position: 'fixed', top: '16px', right: '16px', width: '340px', maxWidth: 'calc(100vw - 32px)',
+    backgroundColor: '#0d1422', color: '#f1f5ff', border: '1px solid #253149', borderRadius: '14px',
+    boxShadow: '0 20px 50px rgba(0,0,0,0.65)', padding: '16px', zIndex: '2147483647',
+    fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: '13px', lineHeight: '1.5'
+  };
 
   function st(e, s) {
     if (e && s) {
@@ -514,6 +554,16 @@ function bookmarklet(APP) {
     if (txt !== undefined && txt !== null) e.textContent = txt;
     if (p) p.appendChild(e);
     return e;
+  }
+
+  function showStatus(t, s) {
+    var old = document.getElementById(ID);
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+    var el = mk('div', CBOX, document.body);
+    el.id = ID;
+    mk('div', { fontWeight: '700', fontSize: '13px', color: '#60a5fa', marginBottom: '4px' }, el, '⚡ ' + t);
+    mk('div', { color: '#94a3b8', fontSize: '12px' }, el, s || 'Please hold on…');
+    return el;
   }
 
   function skip(n) {
@@ -731,12 +781,7 @@ function bookmarklet(APP) {
     var dg = payload.diagnostics || {}, pn = (payload.provider || 'AI').toUpperCase();
     var mc = (typeof dg.total_messages === 'number') ? dg.total_messages : (payload.messages ? payload.messages.length : 0);
 
-    var ov = mk('div', {
-      position: 'fixed', top: '16px', right: '16px', width: '360px', maxWidth: 'calc(100vw - 32px)',
-      backgroundColor: '#0d1422', color: '#f1f5ff', border: '1px solid #253149', borderRadius: '14px',
-      boxShadow: '0 20px 50px rgba(0,0,0,0.65)', padding: '16px', zIndex: '2147483647',
-      fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: '13px', lineHeight: '1.5'
-    }, document.body);
+    var ov = mk('div', CBOX, document.body);
     ov.id = ID;
 
     var cl = mk('button', {
@@ -759,6 +804,10 @@ function bookmarklet(APP) {
     }
 
     var alb = mk('div', { display: 'none', fontSize: '11px', borderRadius: '8px', padding: '6px 8px', marginBottom: '10px' }, ov);
+    function setErr(m) {
+      alb.textContent = m;
+      st(alb, { display: 'block', backgroundColor: 'rgba(255,127,136,0.15)', border: '1px solid #ff7f88', color: '#ffc7cb' });
+    }
     var rw = mk('div', { display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }, ov);
 
     function addBtn(lbl, bg, fn) {
@@ -772,13 +821,12 @@ function bookmarklet(APP) {
     }
 
     var bo, bc, bd;
-    bo = addBtn('Open in Context Exporter', 'linear-gradient(135deg, #7657ff, #4f90ff)', async function() {
-      bo.textContent = 'Compressing…'; bo.disabled = true;
+    bo = addBtn('Open in Context Exporter', 'linear-gradient(135deg, #2563eb, #3b82f6)', async function() {
+      bo.textContent = 'Compressing chat (' + mc + ' msgs)… Please hold on…'; bo.disabled = true;
       try {
         var enc = await tl.compressGzipBase64Url(JSON.stringify(payload));
         if (enc.length > 1500000) {
-          alb.textContent = 'Compressed chat is over 1.5 MB (exceeds URL limit). Please use [Download .json] below and load the file into Context Exporter.';
-          st(alb, { display: 'block', backgroundColor: 'rgba(255,127,136,0.15)', border: '1px solid #ff7f88', color: '#ffc7cb' });
+          setErr('Compressed chat is over 1.5 MB. Use [Download .json] below.');
           bo.textContent = 'Payload too large for URL';
           st(bd, { boxShadow: '0 0 0 2px #55d39a' });
           return;
@@ -787,8 +835,7 @@ function bookmarklet(APP) {
         bo.textContent = 'Opened in new tab!';
         setTimeout(function() { bo.textContent = 'Open in Context Exporter'; bo.disabled = false; }, 3000);
       } catch (e) {
-        alb.textContent = 'Transfer error: ' + (e.message || 'compression error');
-        st(alb, { display: 'block', backgroundColor: 'rgba(255,127,136,0.15)', border: '1px solid #ff7f88', color: '#ffc7cb' });
+        setErr('Transfer error: ' + (e.message || 'error'));
         bo.textContent = 'Open in Context Exporter'; bo.disabled = false;
       }
     });
@@ -839,7 +886,12 @@ function bookmarklet(APP) {
     }
     var rep = { provider: adp.name, method: 'dom', user_count: 0, assistant_count: 0, total_messages: 0, total_chars: 0, warnings: [], unmatched_selectors: [] };
     var tl = { domToMarkdown: domToMarkdown, compressGzipBase64Url: compressGzipBase64Url };
-    try { await autoScroll(); } catch (_) {}
+    showStatus('Context Exporter', 'Scanning chat… Long chats take a moment.');
+    try {
+      showStatus('Loading History', 'Scrolling to load all messages…');
+      await autoScroll();
+    } catch (_) {}
+    showStatus('Extracting Chat', 'Reading messages and code blocks…');
     var payload;
     try { payload = await adp.capture(u, rep, tl); } catch (e) {
       rep.warnings.push('Capture failed: ' + (e.message || 'error'));
@@ -880,6 +932,7 @@ function buildBookmarkletString(origin) {
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/\r?\n\s*/g, ' ')
     .replace(/\s*([=+\-*/%?:;{},()<>!&|^~])\s*/g, '$1')
+    .replace(/\s+/g, ' ')
     .trim();
   return 'javascript:(' + min + ')(' + JSON.stringify(origin) + ');';
 }
@@ -1029,21 +1082,106 @@ $("form").onsubmit = async e => {
   const btn = $("submit");
   btn.disabled = true;
 
-  const steps = [
-    '🔍 Validating input…',
-    '📥 Reading conversation…',
-    '🔎 Extracting messages…',
-    '🗜 Compressing context…',
-    '📄 Building file…'
-  ];
-  let si = 0;
+  // 1. Calculate conversation stats to tailor logs
+  let turnsEstimate = 0;
+  let wordCount = 0;
+  let charCount = 0;
+  let isLargeChat = false;
+
+  if (mode === 'text') {
+    charCount = chatText.length;
+    wordCount = (chatText.trim().match(/\S+/g) || []).length;
+    try {
+      const parsed = JSON.parse(chatText);
+      const ms = parsed.messages || (parsed.snapshot && (parsed.snapshot.chat_messages || parsed.snapshot.messages)) || [];
+      turnsEstimate = Array.isArray(ms) ? ms.length : 0;
+    } catch (_) {
+      const turnMatches = chatText.match(/(?:^|\n)(?:User|Human|Claude|Assistant|Model|ChatGPT|Gemini|Grok):/gi);
+      turnsEstimate = turnMatches ? turnMatches.length : Math.max(1, Math.round(chatText.split('\n\n').length / 2));
+    }
+    isLargeChat = charCount > 18000 || turnsEstimate > 10 || wordCount > 3000;
+  } else {
+    isLargeChat = true;
+  }
+
+  const estToks = Math.round(charCount / 4);
+  const budgetName = budget === 'dynamic' ? 'Dynamic (keep all)' : Number(budget).toLocaleString() + ' tokens';
+
+  // 2. Setup Progress Log UI
   const prog = document.getElementById('progress');
+  const logTitle = document.getElementById('logTitleText');
+  const logTimer = document.getElementById('logTimer');
+  const logBar = document.getElementById('logBarFill');
+  const logStatus = document.getElementById('logStatusText');
+  const logConsole = document.getElementById('logConsole');
+  const logNotice = document.getElementById('logNotice');
+
+  logConsole.textContent = '';
+  logBar.style.width = '10%';
   prog.style.display = 'block';
-  prog.textContent = steps[0];
-  const iv = setInterval(() => {
-    si = Math.min(si + 1, steps.length - 1);
-    prog.textContent = steps[si];
-  }, 3500);
+  logTitle.textContent = isLargeChat ? 'Processing long conversation…' : 'Processing conversation…';
+  logNotice.textContent = isLargeChat
+    ? '⏳ Long conversation detected. Analyzing turns, code blocks & structuring context. Please hold on…'
+    : '⏳ Preparing your structured context export file. Please hold on…';
+
+  const startTime = Date.now();
+  function formatElapsed(sec) {
+    const m = Math.floor(sec / 60).toString().padStart(2, '0');
+    const s = (sec % 60).toString().padStart(2, '0');
+    return m + ':' + s;
+  }
+
+  function appendLog(msg, isHighlight) {
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    const entry = document.createElement('div');
+    entry.className = 'log-entry';
+    
+    const timeSpan = document.createElement('span');
+    timeSpan.className = 'log-time';
+    timeSpan.textContent = '[' + formatElapsed(elapsed) + ']';
+    
+    const msgSpan = document.createElement('span');
+    msgSpan.className = 'log-msg' + (isHighlight ? ' highlight' : '');
+    msgSpan.textContent = msg;
+    
+    entry.appendChild(timeSpan);
+    entry.appendChild(msgSpan);
+    logConsole.appendChild(entry);
+    logConsole.scrollTop = logConsole.scrollHeight;
+  }
+
+  function setStatus(text, barPct) {
+    logStatus.textContent = text;
+    if (barPct) logBar.style.width = barPct + '%';
+  }
+
+  if (mode === 'text') {
+    appendLog('📥 Input loaded: ' + (turnsEstimate ? turnsEstimate + ' turns' : '') + (charCount ? ' (~' + estToks.toLocaleString() + ' tokens, ' + wordCount.toLocaleString() + ' words)' : ''), true);
+    if (isLargeChat) {
+      appendLog('⚡ Long chat detected. Applying smart compression to target: ' + budgetName + '.');
+    }
+  } else {
+    appendLog('🌐 Connecting to share URL: ' + chatUrl.slice(0, 50) + '…', true);
+  }
+
+  const timerIv = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    logTimer.textContent = formatElapsed(elapsed);
+    if (elapsed === 7 && isLargeChat) {
+      logNotice.textContent = '⚡ Deep analysis in progress for long chat history. Thank you for holding on!';
+      appendLog('⏳ Deep analysis in progress: distilling core decisions, code snippets, and recent turns…');
+    } else if (elapsed === 15) {
+      logNotice.textContent = '⚡ Large payload compilation in final stages. Please keep this tab open…';
+      appendLog('🔨 Building clean output file…');
+    }
+  }, 1000);
+
+  const stageTimeouts = [
+    setTimeout(() => { setStatus('🔍 Parsing turns, code blocks, and conversation flow…', 25); appendLog('🔍 Parsing conversation turns and code blocks…'); }, 700),
+    setTimeout(() => { setStatus('🗜 Compressing context to ' + budgetName + ' target…', 45); appendLog('🗜 Applying token budget: ' + budgetName + '…'); }, 2200),
+    setTimeout(() => { setStatus('🧠 Preserving recent decisions, file structures, and critical context…', 65); appendLog('🧠 Selecting high-priority context & removing redundant filler…'); }, 4500),
+    setTimeout(() => { setStatus('📄 Compiling ' + format.toUpperCase() + ' document…', 85); appendLog('📄 Rendering ' + format.toUpperCase() + ' handoff format…'); }, 7500)
+  ];
 
   const formData = new FormData();
   if (mode === 'text') formData.append("text", chatText);
@@ -1073,6 +1211,9 @@ $("form").onsubmit = async e => {
     const size = res.headers.get('content-length');
     const estTok = size ? ' (~' + Math.round(Number(size) / 4).toLocaleString() + ' tokens)' : '';
     const blob = await downloadResponse(res);
+    setStatus('✅ File compiled! Starting download…', 100);
+    appendLog('✅ Generated ' + (estTok || format.toUpperCase()) + ' successfully! Download started.', true);
+    logTitle.textContent = 'Export complete!';
     message('File generated' + estTok + '. Download started.', true);
 
     if (blob.type.includes('markdown') || blob.type.includes('text') || format === 'readme' || format === 'txt') {
@@ -1107,10 +1248,12 @@ $("form").onsubmit = async e => {
     let hint = '';
     if (/EXTRACTOR_|UNSUPPORTED_PROVIDER|NOT_PUBLIC/.test(msg)) hint = ' → Use the “Browser capture” or “Paste chat text / file” option.';
     else if (msg === 'Failed to fetch') hint = ' Check that the server is running and the endpoint URL is correct.';
+    setStatus('❌ Export failed', 100);
+    appendLog('❌ Error: ' + msg, true);
     message("Request failed: " + msg + hint);
   } finally {
-    clearInterval(iv);
-    prog.style.display = 'none';
+    clearInterval(timerIv);
+    stageTimeouts.forEach(clearTimeout);
     btn.disabled = false;
     btn.textContent = "Generate file →";
   }
