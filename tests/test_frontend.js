@@ -74,6 +74,38 @@ describe('Frontend public/index.html Integration Tests', () => {
     assert.ok(copiedText.includes('https://exporter.example.com'), 'Copied script should include origin');
   });
 
+  test('Generated bookmarklet executes on external chat page and renders overlay with action buttons', async () => {
+    /* 1. Extract bookmarklet href from index.html */
+    const domApp = new JSDOM(htmlContent, {
+      url: 'http://localhost:8000/',
+      runScripts: 'dangerously'
+    });
+    const link = domApp.window.document.getElementById('bookmarkletLink');
+    assert.ok(link, 'bookmarkletLink not found');
+    const href = link.getAttribute('href');
+    assert.ok(href.startsWith('javascript:('), 'Expected javascript: href');
+    const codeToEval = href.replace(/^javascript:/, '');
+
+    /* 2. Simulate external chat page with NO #text element in DOM */
+    const domChat = new JSDOM(`<!DOCTYPE html><html><head><title>Test Chat</title></head><body><div data-testid="user-message"><p>User question</p></div><div class="font-claude-response"><p>Assistant response</p></div></body></html>`, {
+      url: 'https://claude.ai/chat/11111111-2222-3333-4444-555555555555',
+      runScripts: 'dangerously'
+    });
+
+    /* 3. Run bookmarklet on chat page */
+    const chatWin = domChat.window;
+    const promise = chatWin.eval(codeToEval);
+    await promise;
+
+    /* 4. Verify overlay is present and contains required action buttons */
+    const overlay = chatWin.document.getElementById('__ace_chat_exporter_overlay__');
+    assert.ok(overlay !== null, 'Bookmarklet overlay was not rendered on chat page');
+    const buttons = Array.from(overlay.querySelectorAll('button')).map(b => b.textContent.trim());
+    assert.ok(buttons.includes('Open in Context Exporter'), 'Overlay missing Open in Context Exporter button');
+    assert.ok(buttons.includes('Copy as text'), 'Overlay missing Copy as text button');
+    assert.ok(buttons.includes('Download .json'), 'Overlay missing Download .json button');
+  });
+
   test('#ace= hash import: decodes, fills textarea, switches tab, displays message, and clears hash without auto-submitting', async () => {
     /* 1. Prepare sample payload */
     const samplePayload = {

@@ -140,9 +140,12 @@ button.primary:disabled{opacity:.6;cursor:not-allowed}
 /* Bookmarklet Container & Detailed Step Cards */
 .bookmarklet-box{border:1px solid var(--line);border-radius:12px;padding:20px;background:var(--card-subtle);margin-top:12px}
 .bm-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0 16px}
-.bookmarklet-btn{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border-radius:8px;background:var(--accent);color:#fff;font-weight:600;font-size:12px;text-decoration:none;cursor:grab;border:1px solid rgba(255,255,255,0.15);user-select:none;transition:background-color .15s}
-.bookmarklet-btn:hover{background:var(--accent-hover)}
-.bookmarklet-btn:active{cursor:grabbing}
+.bookmarklet-btn{display:inline-flex;align-items:center;gap:8px;padding:12px 18px;border-radius:10px;background:var(--accent);color:#fff;font-weight:700;font-size:13px;text-decoration:none;cursor:grab;border:1px solid rgba(255,255,255,0.2);box-shadow:0 2px 10px rgba(37,99,235,0.25);user-select:none;transition:all .15s ease}
+.bookmarklet-btn:hover{background:var(--accent-hover);box-shadow:0 4px 14px rgba(37,99,235,0.35);transform:translateY(-1px)}
+.bookmarklet-btn:active{cursor:grabbing;transform:translateY(0)}
+.bm-icon{font-size:14px;line-height:1}
+.bm-text{font-weight:700;letter-spacing:-.01em}
+.bm-badge{font-size:10px;font-weight:600;opacity:.92;background:rgba(255,255,255,0.22);padding:2px 7px;border-radius:5px;letter-spacing:.02em;margin-left:2px}
 .copy-script-btn{padding:10px 14px;border-radius:8px;background:var(--card);border:1px solid var(--line);color:var(--text);cursor:pointer;font-size:11px;font-weight:600;transition:all .15s}
 .copy-script-btn:hover{border-color:var(--line-strong);background:var(--bg-subtle)}
 
@@ -195,7 +198,7 @@ footer{display:flex;justify-content:space-between;color:var(--text-muted);font-s
   </div>
 
   <section class="grid">
-    <form class="card" id="form">
+    <form class="card" id="form" autocomplete="off">
       <div class="head">
         <div>
           <div class="label">Step 1 · Choose Source</div>
@@ -220,7 +223,9 @@ footer{display:flex;justify-content:space-between;color:var(--text-muted);font-s
 
           <div class="bm-actions">
             <a id="bookmarkletLink" class="bookmarklet-btn" draggable="true" href="#">
-              <span>✦</span> Send to Context Exporter
+              <span class="bm-icon">🔖</span>
+              <span class="bm-text">Send to Context Exporter</span>
+              <span class="bm-badge">Drag to Bookmarks Bar</span>
             </a>
             <button type="button" id="copyScriptBtn" class="copy-script-btn">Copy script (console fallback)</button>
           </div>
@@ -506,7 +511,7 @@ function bookmarklet(APP) {
   function mk(t, s, p, txt) {
     var e = document.createElement(t);
     st(e, s);
-    if (text !== undefined && text !== null) e.textContent = txt;
+    if (txt !== undefined && txt !== null) e.textContent = txt;
     if (p) p.appendChild(e);
     return e;
   }
