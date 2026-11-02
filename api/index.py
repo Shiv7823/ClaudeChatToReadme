@@ -453,6 +453,24 @@ def _turns_from_mapping(conv: Dict[str, Any]) -> List[Dict[str, str]]:
 
 def turns_from_json(data: Any, warnings: List[str]) -> Dict[str, Any]:
     """Claude snapshot / Claude export / ChatGPT export (single chat or a whole conversations.json)."""
+    if isinstance(data, dict) and 'snapshot' in data and isinstance(data['snapshot'], (dict, list)):
+        outer_title = str(data.get('title') or '').strip()
+        diag_warnings: List[str] = []
+        if isinstance(data.get('diagnostics'), dict) and isinstance(data['diagnostics'].get('warnings'), list):
+            diag_warnings = [str(w) for w in data['diagnostics']['warnings'] if w]
+        res = turns_from_json(data['snapshot'], warnings)
+        for dw in diag_warnings:
+            if dw not in warnings:
+                warnings.append(dw)
+        if outer_title and not res.get('title'):
+            res['title'] = outer_title
+        return res
+
+    if isinstance(data, dict) and isinstance(data.get('diagnostics'), dict) and isinstance(data['diagnostics'].get('warnings'), list):
+        for dw in data['diagnostics']['warnings']:
+            if dw and str(dw) not in warnings:
+                warnings.append(str(dw))
+
     if isinstance(data, list) and data and isinstance(data[0], dict) and ('mapping' in data[0] or 'chat_messages' in data[0]):
         def stamp(c: Dict[str, Any]):
             v = c.get('updated_at') or c.get('update_time') or c.get('created_at') or c.get('create_time') or 0

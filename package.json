@@ -1,0 +1,25 @@
+{
+  "name": "claudechattoreadme",
+  "version": "1.0.0",
+  "description": "AI Chat Context Exporter takes a public AI conversation share link (from Claude, ChatGPT, Gemini, or Grok) and transforms it into a clean, compact, structured context handoff file (`.md`, `.txt`, `.doc`, or `.pdf`) designed to be dropped directly into a fresh chat session without carrying over unnecessary conversation history or blowing your token budget.",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test tests/test_bookmarklet_runner.js tests/test_frontend.js",
+    "test:python": "python -m unittest tests/test_backend.py"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Shiv7823/ClaudeChatToReadme.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Shiv7823/ClaudeChatToReadme/issues"
+  },
+  "homepage": "https://github.com/Shiv7823/ClaudeChatToReadme#readme",
+  "devDependencies": {
+    "jsdom": "^30.1.3"
+  }
+}
